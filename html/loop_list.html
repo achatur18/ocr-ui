@@ -1,0 +1,17 @@
+<!DOCTYPE html>
+<html>
+<head>
+<title>Results display</title>
+</head>
+
+<body>
+
+        
+    {% for result in results %}
+    <form action="/get_transcription/" >
+    <input name="id" value="{{  result['_id'] }}" type="submit"><br>
+    </form>
+    {% endfor %}
+</body>
+
+</html>
