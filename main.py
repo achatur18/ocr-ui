@@ -1,9 +1,13 @@
 from pydoc import describe
 from tokenize import String
+import cv2
 from fastapi import FastAPI, Path, Request, UploadFile, File
 from fastapi.responses import HTMLResponse
 from fastapi.templating import Jinja2Templates
 from create_bb import get_bboxes
+from PIL import Image
+
+from get_raw_text import trocr
 
 from paddleocr import PaddleOCR,draw_ocr
 # Paddleocr supports Chinese, English, French, German, Korean and Japanese.
@@ -147,6 +151,43 @@ async def paddleocr(imgs: List[UploadFile] = File(...)):
         text=""
         for line in result:
             text+=" "+line[-1][0]
+        id = hashlib.sha256(text.encode('utf-8')).hexdigest()
+
+        if (collection.find_one({"_id":id})):
+            print("Transcription already exists with id: {}".format(id))
+        else:
+            collection.insert_one({"_id":id, "transcription":text})
+
+    return{"Done!"}
+
+
+@app.post("/ocr_combination")
+async def paddleocr2(imgs: List[UploadFile] = File(...), thres=0.8):
+    thres=float(thres)
+    imgs = convert_and_save_pdf2image(imgs)
+
+    for img in imgs:
+        file_location = img
+        result = ocr.ocr(file_location, cls=True)
+        text=""
+        for line in result:
+            if float(line[-1][-1])>=thres:
+                text+=" "+str(line)
+            else:
+                [[x1, y1], [x2, y2], [x3, y3], [x4, y4]] = line[0]
+                top_left_x = int(min([x1,x2,x3,x4]))
+                top_left_y = int(min([y1,y2,y3,y4]))
+                bot_right_x = int(max([x1,x2,x3,x4]))
+                bot_right_y = int(max([y1,y2,y3,y4]))
+
+                image = cv2.imread(img)
+                crop = image[top_left_y:bot_right_y, top_left_x:bot_right_x]
+
+                crop = Image.fromarray(crop)
+                # is this crop var is typed or handwritten
+                pred, conf = trocr(crop)
+                text+=" "+pred
+
         id = hashlib.sha256(text.encode('utf-8')).hexdigest()
 
         if (collection.find_one({"_id":id})):
